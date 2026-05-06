@@ -48,6 +48,20 @@ const (
 // providerVersion is set by the build process using -ldflags -X.
 var providerVersion = "unknown"
 
+var cacheInitializers = make(map[string]func(*hcloud.Client, time.Duration) ServerCache, 3)
+
+func init() {
+	cacheInitializers[string(config.InstanceCacheModeAllServers)] = func(c *hcloud.Client, ttl time.Duration) ServerCache {
+		return NewAllServerCache(c, ttl)
+	}
+	cacheInitializers[string(config.InstanceCacheModePerServer)] = func(c *hcloud.Client, ttl time.Duration) ServerCache {
+		return NewPerServerCache(c, ttl)
+	}
+	cacheInitializers[string(config.InstanceCacheModeOff)] = func(c *hcloud.Client, _ time.Duration) ServerCache {
+		return NewNoCache(c)
+	}
+}
+
 type cloud struct {
 	client      *hcloud.Client
 	robotClient hrobot.RobotClient
@@ -142,13 +156,7 @@ func NewCloud(cidr string) (cloudprovider.Interface, error) {
 
 	klog.Infof("Hetzner Cloud k8s cloud controller %s started\n", providerVersion)
 
-	var srvCache ServerCache
-	switch cfg.Instance.Cache.Mode {
-	case config.InstanceCacheModeAllServers:
-		srvCache = NewAllServerCache(client, cfg.Instance.Cache.TTL)
-	case config.InstanceCacheModePerServer:
-		srvCache = NewPerServerCache(client, cfg.Instance.Cache.TTL)
-	}
+	srvCache := cacheInitializers[string(cfg.Instance.Cache.Mode)](client, cfg.Instance.Cache.TTL)
 
 	return &cloud{
 		client:      client,

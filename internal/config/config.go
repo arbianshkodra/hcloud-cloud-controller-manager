@@ -75,6 +75,8 @@ type InstanceCacheMode string
 const (
 	InstanceCacheModeAllServers InstanceCacheMode = "all"
 	InstanceCacheModePerServer  InstanceCacheMode = "per-server"
+	InstanceCacheModeEval       InstanceCacheMode = "eval"
+	InstanceCacheModeOff        InstanceCacheMode = "off"
 )
 
 const InstanceCacheDefaultTTL time.Duration = 10 * time.Second
@@ -312,8 +314,10 @@ func (c HCCMConfiguration) Validate() (err error) {
 	if !slices.Contains([]InstanceCacheMode{
 		InstanceCacheModeAllServers,
 		InstanceCacheModePerServer,
+		InstanceCacheModeEval,
+		InstanceCacheModeOff,
 	}, c.Instance.Cache.Mode) {
-		errs = append(errs, fmt.Errorf("invalid value for %q, expect one of: %s,%s", hcloudInstancesCacheMode, InstanceCacheModeAllServers, InstanceCacheModePerServer))
+		errs = append(errs, fmt.Errorf("invalid value for %q, expect one of: %s,%s,%s,%s", hcloudInstancesCacheMode, InstanceCacheModeAllServers, InstanceCacheModePerServer, InstanceCacheModeEval, InstanceCacheModeOff))
 	}
 
 	if c.LoadBalancer.Location != "" && c.LoadBalancer.NetworkZone != "" {

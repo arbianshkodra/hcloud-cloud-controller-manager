@@ -13,7 +13,7 @@ ARG CGO_ENABLED=0
 ARG SKAFFOLD_GO_GCFLAGS
 ARG GO_BUILDFLAGS
 ENV GOCACHE=/cache
-RUN --mount=type=cache,target="/cache" go build -gcflags="$SKAFFOLD_GO_GCFLAGS" $GO_BUILDFLAGS -o hcloud-cloud-controller-manager.bin github.com/hetznercloud/hcloud-cloud-controller-manager
+RUN --mount=type=cache,target="/cache" go build -tags "eval" -gcflags="$SKAFFOLD_GO_GCFLAGS" $GO_BUILDFLAGS -o hcloud-cloud-controller-manager.bin github.com/hetznercloud/hcloud-cloud-controller-manager
 
 FROM alpine:3.23
 

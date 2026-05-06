@@ -21,6 +21,7 @@ type ServerCache interface {
 var _ ServerCache = (*PerServerCache)(nil)
 
 type PerServerCache struct {
+	name    string
 	ttl     time.Duration
 	maxSize int
 
@@ -43,6 +44,7 @@ const (
 
 func NewPerServerCache(client *hcloud.Client, ttl time.Duration) *PerServerCache {
 	return &PerServerCache{
+		name:    "server",
 		ttl:     ttl,
 		client:  client,
 		maxSize: DefaultPerServerCacheMaxSize,
@@ -59,14 +61,14 @@ func (c *PerServerCache) getOrFetch(
 	defer c.mu.Unlock()
 
 	if entry := lookup(); entry != nil && time.Now().Before(entry.expiredAt) {
-		metrics.CacheRequests.WithLabelValues("server", "hit").Inc()
+		metrics.CacheRequests.WithLabelValues(c.name, "hit").Inc()
 		klog.V(4).InfoS("per-server cache hit", "id", entry.server.ID, "name", entry.server.Name)
 		return entry.server, nil
 	}
 
 	klog.V(4).InfoS("per-server cache miss, fetching from api")
 	server, _, err := fetch()
-	metrics.CacheRequests.WithLabelValues("server", "miss").Inc()
+	metrics.CacheRequests.WithLabelValues(c.name, "miss").Inc()
 	if err != nil {
 		return nil, err
 	}
@@ -134,6 +136,7 @@ func (c *PerServerCache) evictExpired() {
 var _ ServerCache = (*AllServerCache)(nil)
 
 type AllServerCache struct {
+	name      string
 	ttl       time.Duration
 	expiredAt time.Time
 
@@ -147,6 +150,7 @@ type AllServerCache struct {
 
 func NewAllServerCache(client *hcloud.Client, ttl time.Duration) *AllServerCache {
 	return &AllServerCache{
+		name:      "server",
 		ttl:       ttl,
 		client:    client,
 		expiredAt: time.Now(),
@@ -180,7 +184,7 @@ func (c *AllServerCache) getFromCache(ctx context.Context, lookup func() *hcloud
 
 	if time.Now().Before(c.expiredAt) {
 		if server := lookup(); server != nil {
-			metrics.CacheRequests.WithLabelValues("server", "hit").Inc()
+			metrics.CacheRequests.WithLabelValues(c.name, "hit").Inc()
 			klog.V(4).InfoS("all-server cache hit", "id", server.ID, "name", server.Name)
 			return server, nil
 		}
@@ -195,7 +199,7 @@ func (c *AllServerCache) getFromCache(ctx context.Context, lookup func() *hcloud
 		return nil, err
 	}
 
-	metrics.CacheRequests.WithLabelValues("server", "miss").Inc()
+	metrics.CacheRequests.WithLabelValues(c.name, "miss").Inc()
 
 	// Return server or nil, if the server does still not exist.
 	server := lookup()
@@ -215,4 +219,32 @@ func (c *AllServerCache) ByID(ctx context.Context, id int64) (*hcloud.Server, er
 // ByName implements [ServerCache].
 func (c *AllServerCache) ByName(ctx context.Context, name string) (*hcloud.Server, error) {
 	return c.getFromCache(ctx, func() *hcloud.Server { return c.byName[name] })
+}
+
+// ----- NoCache -----
+
+// NoCache is a pass-through [ServerCache] that always queries the API.
+// Useful as a baseline for measuring detection latency without cache and as
+// an explicit opt-out for operators who prefer the unconditional fresh read.
+var _ ServerCache = (*NoCache)(nil)
+
+type NoCache struct {
+	name   string
+	client *hcloud.Client
+}
+
+func NewNoCache(client *hcloud.Client) *NoCache {
+	return &NoCache{name: "off", client: client}
+}
+
+func (c *NoCache) ByID(ctx context.Context, id int64) (*hcloud.Server, error) {
+	metrics.CacheRequests.WithLabelValues(c.name, "miss").Inc()
+	server, _, err := c.client.Server.GetByID(ctx, id)
+	return server, err
+}
+
+func (c *NoCache) ByName(ctx context.Context, name string) (*hcloud.Server, error) {
+	metrics.CacheRequests.WithLabelValues(c.name, "miss").Inc()
+	server, _, err := c.client.Server.GetByName(ctx, name)
+	return server, err
 }
