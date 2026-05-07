@@ -44,7 +44,7 @@ const (
 
 func NewPerServerCache(client *hcloud.Client, ttl time.Duration) *PerServerCache {
 	return &PerServerCache{
-		name:    "server",
+		name:    "per-server",
 		ttl:     ttl,
 		client:  client,
 		maxSize: DefaultPerServerCacheMaxSize,
@@ -150,7 +150,7 @@ type AllServerCache struct {
 
 func NewAllServerCache(client *hcloud.Client, ttl time.Duration) *AllServerCache {
 	return &AllServerCache{
-		name:      "server",
+		name:      "all-server",
 		ttl:       ttl,
 		client:    client,
 		expiredAt: time.Now(),
